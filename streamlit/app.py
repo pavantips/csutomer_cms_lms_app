@@ -352,6 +352,8 @@ def page_add_bluebird():
         c7, c8 = st.columns(2)
         active_date = c7.text_input("active_date",  value=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
         end_date    = c8.text_input("end_date",     value=(datetime.now(timezone.utc) + timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+        department_id = st.text_input("department_id", value="13902",
+                                       placeholder="e.g. 13902")
         permitted_resources_list = st.text_input("permitted_resources_list (optional)",
                                                   placeholder="e.g. scratch_paper, online_calculator")
         other_resources = st.text_area("other_resources (optional)",
@@ -363,6 +365,8 @@ def page_add_bluebird():
                     student_id=student_id, exam_id=exam_id, description=description,
                     duration=str(duration), time_zone_id=tz, exam_url=exam_url,
                     active_date=active_date, end_date=end_date, time_sent=now_iso())
+        if department_id.strip():
+            body["department_id"] = department_id.strip()
         if permitted_resources_list.strip():
             body["permitted_resources_list"] = permitted_resources_list.strip()
         if other_resources.strip():
