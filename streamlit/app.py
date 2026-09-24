@@ -1024,7 +1024,10 @@ def page_tc_post_appointment():
         u_email = st.text_input("email",        value=rand_email(fn, ln))
         c9, c10 = st.columns(2)
         u_external_id = c9.text_input("external_id", value=get_ctx("student_id") or rand_id())
-        u_phone       = c10.text_input("phone",       value=f"312555{tag}")
+        u_phone       = c10.text_input("phone_mobile", value=f"312555{tag}")
+        c11, c12 = st.columns(2)
+        u_country  = c11.text_input("country",  value="US", max_chars=2)
+        u_timezone = c12.text_input("timezone", value="America/Chicago")
         submitted = st.form_submit_button("📅 Post Appointment", use_container_width=True)
     if submitted:
         body = {
@@ -1034,7 +1037,9 @@ def page_tc_post_appointment():
                           "delivery_window_uuid": delivery_window_uuid,
                           "vendor_time_slot_id": vendor_time_slot_id},
             "user": {"first_name": u_first, "last_name": u_last,
-                     "email": u_email, "external_id": u_external_id, "phone": u_phone},
+                     "email": u_email, "external_id": u_external_id,
+                     "phone_mobile": u_phone, "country": u_country,
+                     "timezone": u_timezone},
         }
         url = f"{TC_BASE}/institutions/{institution_uuid}/exams/{exam_uuid}/appointments"
         with st.spinner("Booking appointment..."):
