@@ -248,13 +248,16 @@ def _seed(page_key):
         }
     return st.session_state[k]
 
-def show_response(result, launch_url=None):
+def show_response(result):
     if not result:
         return
-    # Launch button — shown above tabs when data.data.url is present (or fallback provided)
+    # Launch button — checks data.data.url (Add Bluebird) and data.url (Record+)
     _data  = result.get("data")
     _inner = _data.get("data") if isinstance(_data, dict) else None
-    launch_url = (_inner.get("url") if isinstance(_inner, dict) else None) or launch_url
+    launch_url = (
+        (_inner.get("url") if isinstance(_inner, dict) else None)
+        or (_data.get("url") if isinstance(_data, dict) else None)
+    )
     if launch_url:
         st.markdown(
             f"""<a href="{launch_url}" target="_blank"
@@ -514,13 +517,11 @@ def page_record_plus():
                     time_zone_id=tz, exam_id=exam_id, description=description,
                     exam_url=exam_url, duration=str(duration), preset=preset,
                     exam_password=exam_password)
-        st.session_state["rp_exam_url"] = exam_url
         with st.spinner("Calling API..."):
             result = post_json(f"{API_BASE}/exams/add_record_plus_exams", body)
         extract_and_save(result, student_id=student_id, exam_id=exam_id)
         st.session_state["last_result"] = result
-    show_response(st.session_state.get("last_result"),
-                  launch_url=st.session_state.get("rp_exam_url"))
+    show_response(st.session_state.get("last_result"))
 
 
 def page_record_plus_fulfill():
