@@ -144,6 +144,7 @@ def extract_and_save(result: dict, **explicit):
 
 # ── Sidebar ───────────────────────────────────────────────────
 def _sel(key):
+    st.session_state.pop(f"_seed_{key}", None)
     st.session_state["selection"] = key
 
 with st.sidebar:
@@ -226,6 +227,27 @@ def rand_id():        return str(random.randint(10000, 99999))
 def rand_exam_id():   return str(random.randint(100000, 999999))
 def new_uuid():       return str(uuid.uuid4())
 
+def _seed(page_key):
+    """Generates random defaults once per page visit; reset when navigating to the page."""
+    k = f"_seed_{page_key}"
+    if k not in st.session_state:
+        fn, ln = rand_name()
+        tag = random.randint(1000, 9999)
+        st.session_state[k] = {
+            "fn": fn, "ln": ln, "tag": tag,
+            "email": rand_email(fn, ln),
+            "id": rand_id(),
+            "res_id": rand_id(),
+            "exam_id": rand_exam_id(),
+            "description": random.choice(EXAM_NAMES),
+            "uuid": new_uuid(),
+            "city": random.choice(["Schaumburg", "Chicago", "Austin", "Denver", "Phoenix"]),
+            "address_num": random.randint(100, 999),
+            "postal": str(random.randint(10000, 99999)),
+            "dept_id_rand": str(random.randint(700000000, 799999999)),
+        }
+    return st.session_state[k]
+
 def show_response(result):
     if not result:
         return
@@ -281,14 +303,14 @@ def page_create_user():
     st.markdown("**`POST`** `api.proctoru.com/api/editStudent/`")
     st.title("Create User")
     st.caption("Creates or updates a student account. Saves student_id to session after success.")
-    fn, ln = rand_name(); tag = random.randint(1000, 9999)
+    d = _seed("create_user"); fn, ln = d["fn"], d["ln"]; tag = d["tag"]
     with st.form("create_user"):
         c1, c2 = st.columns(2)
         first_name = c1.text_input("first_name", value=fn)
         last_name  = c2.text_input("last_name",  value=ln)
-        email      = st.text_input("email",       value=rand_email(fn, ln))
+        email      = st.text_input("email",       value=d["email"])
         c3, c4 = st.columns(2)
-        student_id = c3.text_input("student_id",  value=rand_id())
+        student_id = c3.text_input("student_id",  value=d["id"])
         phone      = c4.text_input("phone1",       value=f"312555{tag}")
         c5, c6 = st.columns(2)
         country    = c5.text_input("country",      value="US", max_chars=2)
@@ -313,11 +335,11 @@ def page_auto_login():
     sid = get_ctx("student_id")
     if sid:
         st.info(f"💡 Using **student_id `{sid}`** from session — captured from a previous call.")
-    fn, ln = rand_name()
+    d = _seed("auto_login"); fn, ln = d["fn"], d["ln"]
     with st.form("auto_login"):
         c1, c2 = st.columns(2)
         student_id = c1.text_input("student_id", value=sid, placeholder="Run Create User first")
-        email      = c2.text_input("email",       value=rand_email(fn, ln))
+        email      = c2.text_input("email",       value=d["email"])
         c3, c4 = st.columns(2)
         first_name = c3.text_input("first_name",  value=fn)
         last_name  = c4.text_input("last_name",   value=ln)
@@ -335,16 +357,16 @@ def page_add_bluebird():
     st.markdown("**`POST`** `api.proctoru.com/api/addBlueBirdExam`")
     st.title("Add Bluebird")
     st.caption("Schedules a live-proctored Bluebird exam. Saves student_id and exam_id to session.")
-    fn, ln = rand_name(); tag = random.randint(1000, 9999)
+    d = _seed("add_bluebird"); fn, ln = d["fn"], d["ln"]; tag = d["tag"]
     with st.form("add_bluebird"):
         c1, c2 = st.columns(2)
         first_name  = c1.text_input("first_name",  value=fn)
         last_name   = c2.text_input("last_name",   value=ln)
-        email       = st.text_input("email",        value=rand_email(fn, ln))
+        email       = st.text_input("email",        value=d["email"])
         c3, c4 = st.columns(2)
-        student_id  = c3.text_input("student_id",  value=get_ctx("student_id") or rand_id())
-        exam_id     = c4.text_input("exam_id",      value=rand_exam_id())
-        description = st.text_input("description",  value=random.choice(EXAM_NAMES))
+        student_id  = c3.text_input("student_id",  value=get_ctx("student_id") or d["id"])
+        exam_id     = c4.text_input("exam_id",      value=d["exam_id"])
+        description = st.text_input("description",  value=d["description"])
         c5, c6 = st.columns(2)
         duration    = c5.number_input("duration (min)", value=60, step=15)
         tz          = c6.selectbox("time_zone_id",  TIMEZONES)
@@ -415,17 +437,17 @@ def page_add_adhoc():
 
     st.divider()
     st.subheader("Step 2 — Book Adhoc Exam")
-    fn, ln = rand_name(); tag = random.randint(1000, 9999)
+    d = _seed("add_adhoc"); fn, ln = d["fn"], d["ln"]; tag = d["tag"]
     with st.form("add_adhoc"):
         c1, c2 = st.columns(2)
         first_name  = c1.text_input("first_name",    value=fn)
         last_name   = c2.text_input("last_name",     value=ln)
-        email       = st.text_input("email",          value=rand_email(fn, ln))
+        email       = st.text_input("email",          value=d["email"])
         c3, c4 = st.columns(2)
-        student_id  = c3.text_input("student_id",    value=get_ctx("student_id") or rand_id())
+        student_id  = c3.text_input("student_id",    value=get_ctx("student_id") or d["id"])
         user_pass   = c4.text_input("user_password", value=f"Pass{tag}!")
         tz2         = st.selectbox("time_zone_id", TIMEZONES, key="adhoc_tz2")
-        description = st.text_input("description",   value=random.choice(EXAM_NAMES))
+        description = st.text_input("description",   value=d["description"])
         c5, c6 = st.columns(2)
         duration2   = c5.text_input("duration",      value="120")
         dept_id     = c6.text_input("department_id", value="740364540")
@@ -433,7 +455,7 @@ def page_add_adhoc():
         exam_pass   = st.text_input("exam_password", value=f"ExP{tag}")
         book_start  = st.text_input("start_date",    value=selected_start)
         c7, c8 = st.columns(2)
-        res_id      = c7.text_input("reservation_id", value=rand_id())
+        res_id      = c7.text_input("reservation_id", value=d["res_id"])
         takeitnow2  = c8.selectbox("takeitnow", ["Y", "N"], key="adhoc_tin2")
         notes       = st.text_input("notes",          value="", placeholder="Optional")
         submitted   = st.form_submit_button("📅 Book Adhoc Exam", use_container_width=True)
@@ -454,15 +476,15 @@ def page_record_plus():
     st.markdown("**`POST`** `api.proctoru.com/api/exams/add_record_plus_exams`")
     st.title("Record+")
     st.caption("Creates a Record+ automated proctoring exam. Saves reservation_uuid to session for Fulfill step.")
-    fn, ln = rand_name(); tag = random.randint(1000, 9999)
+    d = _seed("record_plus"); fn, ln = d["fn"], d["ln"]; tag = d["tag"]
     with st.form("record_plus"):
         st.markdown("**Student**")
         c1, c2 = st.columns(2)
         first_name    = c1.text_input("first_name",    value=fn)
         last_name     = c2.text_input("last_name",     value=ln)
         c3, c4 = st.columns(2)
-        student_id    = c3.text_input("student_id",    value=get_ctx("student_id") or rand_id())
-        email         = c4.text_input("email",         value=rand_email(fn, ln))
+        student_id    = c3.text_input("student_id",    value=get_ctx("student_id") or d["id"])
+        email         = c4.text_input("email",         value=d["email"])
         c5, c6 = st.columns(2)
         phone         = c5.text_input("phone1",        value=f"312555{str(tag)[:4]}")
         user_password = c6.text_input("user_password", value=f"Pass{tag}!")
@@ -477,9 +499,9 @@ def page_record_plus():
         zipcode       = st.text_input("ZipCode",       value="", placeholder="Optional")
         st.markdown("**Exam**")
         c11, c12 = st.columns(2)
-        exam_id       = c11.text_input("exam_id",      value=rand_exam_id())
+        exam_id       = c11.text_input("exam_id",      value=d["exam_id"])
         duration      = c12.number_input("duration (min)", value=90, step=15)
-        description   = st.text_input("description (Exam Name)", value=random.choice(EXAM_NAMES))
+        description   = st.text_input("description (Exam Name)", value=d["description"])
         exam_url      = st.text_input("exam_url",      value="https://exam-demo.streamlit.app/")
         c13, c14 = st.columns(2)
         preset        = c13.selectbox("preset",        ["high", "medium", "low"])
@@ -551,14 +573,15 @@ def page_create_exam():
     st.markdown("**`POST`** `api.proctoru.com/api/editTermExam`")
     st.title("Create Exam")
     st.caption("Creates or updates an exam within a term. Saves exam_id and term_id to session.")
+    d = _seed("create_exam")
     with st.form("create_exam"):
         c1, c2 = st.columns(2)
-        term_id     = c1.text_input("term_id",   value=get_ctx("term_id") or rand_id())
-        exam_id     = c2.text_input("exam_id",   value=rand_exam_id())
-        name        = st.text_input("name",       value=random.choice(EXAM_NAMES))
+        term_id     = c1.text_input("term_id",   value=get_ctx("term_id") or d["id"])
+        exam_id     = c2.text_input("exam_id",   value=d["exam_id"])
+        name        = st.text_input("name",       value=d["description"])
         c3, c4 = st.columns(2)
         duration    = c3.number_input("duration (min)", value=60, step=15)
-        dept_id     = c4.text_input("department_id", value=str(random.randint(700000000, 799999999)))
+        dept_id     = c4.text_input("department_id", value=d["dept_id_rand"])
         exam_url    = st.text_input("exam_url",   value="https://exam-demo.streamlit.app/")
         submitted   = st.form_submit_button("⚡ Send Request", use_container_width=True)
     if submitted:
@@ -785,15 +808,14 @@ def page_meazure_create_user():
     st.markdown("**`POST`** `api.ysasecure.com/v2/users`")
     st.title("Create User — Meazure")
     st.caption("Creates a student on the Meazure platform. Auth token injected server-side.")
-    fn, ln = rand_name(); tag = random.randint(1000, 9999)
-    city = random.choice(["Schaumburg", "Chicago", "Austin", "Denver", "Phoenix"])
+    d = _seed("meazure_user"); fn, ln = d["fn"], d["ln"]; tag = d["tag"]
     with st.form("meazure_user"):
         st.markdown("**Identity**")
-        username = st.text_input("username (UUID)", value=new_uuid())
+        username = st.text_input("username (UUID)", value=d["uuid"])
         c1, c2 = st.columns(2)
         first_name  = c1.text_input("first_name",   value=fn)
         last_name   = c2.text_input("last_name",    value=ln)
-        email       = st.text_input("email",         value=rand_email(fn, ln))
+        email       = st.text_input("email",         value=d["email"])
         alt_email   = st.text_input("alternate_email", value=f"{fn.lower()}.bak{tag}@example.com")
         c3, c4 = st.columns(2)
         site_id    = c3.text_input("site_id",     value="286")
@@ -802,11 +824,11 @@ def page_meazure_create_user():
         lang       = c5.selectbox("preferred_language", ["en", "es", "fr", "de", "zh"])
         send_email = c6.checkbox("send_email", value=False)
         st.markdown("**Address**")
-        address1   = st.text_input("address1", value=f"{random.randint(100,999)} Main St")
+        address1   = st.text_input("address1", value=f"{d['address_num']} Main St")
         address2   = st.text_input("address2", value="", placeholder="Optional")
         c7, c8 = st.columns(2)
-        city_val    = c7.text_input("city",        value=city)
-        postal_code = c8.text_input("postal_code", value=str(random.randint(10000, 99999)))
+        city_val    = c7.text_input("city",        value=d["city"])
+        postal_code = c8.text_input("postal_code", value=d["postal"])
         c9, c10 = st.columns(2)
         country  = c9.text_input("country (2-letter)", value="US", max_chars=2)
         province = c10.text_input("province/state", value="", placeholder="Optional")
@@ -1001,7 +1023,7 @@ def page_tc_post_appointment():
     vtsi = get_ctx("vendor_time_slot_id")
     if iid or eid:
         st.info("💡 Chain IDs pre-filled from session.")
-    fn, ln = rand_name(); tag = random.randint(1000, 9999)
+    d = _seed("tc_post"); fn, ln = d["fn"], d["ln"]; tag = d["tag"]
     with st.form("tc_appointment"):
         st.markdown("**Endpoint IDs**")
         c1, c2 = st.columns(2)
@@ -1021,9 +1043,9 @@ def page_tc_post_appointment():
         c7, c8 = st.columns(2)
         u_first = c7.text_input("first_name",  value=fn)
         u_last  = c8.text_input("last_name",   value=ln)
-        u_email = st.text_input("email",        value=rand_email(fn, ln))
+        u_email = st.text_input("email",        value=d["email"])
         c9, c10 = st.columns(2)
-        u_external_id = c9.text_input("external_id", value=get_ctx("student_id") or rand_id())
+        u_external_id = c9.text_input("external_id", value=get_ctx("student_id") or d["id"])
         u_phone       = c10.text_input("phone_mobile", value=f"312555{tag}")
         c11, c12 = st.columns(2)
         u_country  = c11.text_input("country",  value="US", max_chars=2)
