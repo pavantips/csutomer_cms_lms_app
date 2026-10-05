@@ -94,6 +94,15 @@ def post_with_query(url: str, query_params: dict, body: dict | None = None) -> d
         return _err(e, meta)
 
 
+def put_json(url: str, body: dict) -> dict:
+    meta = {"url": url, "method": "PUT", "contentType": "application/json", "body": body}
+    try:
+        r = requests.put(url, json=body, headers=_auth_headers(), timeout=30)
+        return _wrap(r, meta)
+    except Exception as e:
+        return _err(e, meta)
+
+
 def delete_req(url: str) -> dict:
     meta = {"url": url, "method": "DELETE"}
     try:

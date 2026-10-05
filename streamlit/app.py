@@ -8,7 +8,7 @@ import streamlit as st
 from datetime import datetime, timezone, timedelta
 from api.client import (
     API_BASE, DEMO_BASE, GO_BASE, TC_BASE, TC_GO_BASE, MEAZURE_BASE, MEAZURE_TOKEN,
-    now_iso, post_json, post_form, get_params, post_with_query, delete_req, post_external,
+    now_iso, post_json, put_json, post_form, get_params, post_with_query, delete_req, post_external,
 )
 
 st.set_page_config(page_title="Customer LMS or CMS application", page_icon="🔬", layout="wide")
@@ -173,6 +173,7 @@ with st.sidebar:
             if st.button("Standalone Login",   key="s_pu_standalone",   use_container_width=True): _sel("pu_standalone")
             if st.button("Add Adhoc",          key="s_add_adhoc",       use_container_width=True): _sel("add_adhoc")
             if st.button("Record+",            key="s_record_plus",     use_container_width=True): _sel("record_plus")
+            if st.button("Record+ V2",         key="s_rp2",             use_container_width=True): _sel("rp2")
             if st.button("Begin Reservation",  key="s_begin_res",       use_container_width=True): _sel("begin_res")
             if st.button("Auto Login",         key="s_auto_login",      use_container_width=True): _sel("auto_login")
 
@@ -1097,6 +1098,135 @@ def page_tc_delete_appointment():
 
 
 # ══════════════════════════════════════════════════════════════
+# RECORD+ V2 — API v2 multi-step flow
+# ══════════════════════════════════════════════════════════════
+
+def page_rp2():
+    st.markdown("**`POST`** `/api/v2/users` → `/api/v2/email/users/{email}/grants` → **`PUT`** `.../grants/{uuid}/start_url`")
+    st.title("Record+ V2")
+    st.caption("API v2 flow: Create User → Create Grant → Get Start URL. One button runs the full sequence.")
+
+    # ── ① Exam Setup (one-time) ───────────────────────────────────────────────
+    st.subheader("① Exam Setup  *(one-time)*")
+    iid        = get_ctx("institution_uuid")
+    saved_exam = get_ctx("rp2_exam_external_id")
+    if saved_exam:
+        st.success(f"✅ Exam ready — `{saved_exam}` · Navigate away and back to create a new one.")
+
+    with st.expander("Create Exam", expanded=not bool(saved_exam)):
+        d_ex = _seed("rp2_exam")
+        with st.form("rp2_create_exam"):
+            institution_uuid_ex = st.text_input("institution_uuid", value=iid,
+                                                 placeholder="From TC: Get Institution / whoami")
+            c1, c2 = st.columns(2)
+            exam_ext_id = c1.text_input("external_id",   value=d_ex["exam_id"],
+                                         placeholder="e.g. MATH101_FINAL_2024")
+            exam_name   = c2.text_input("name",          value=d_ex["description"])
+            c3, c4 = st.columns(2)
+            exam_dur  = c3.number_input("duration (min)", value=60, step=15)
+            dept_id   = c4.text_input("department_id",   value="13902")
+            exam_url_ex = st.text_input("exam_url",      value="https://exam-demo.streamlit.app/")
+            c5, c6 = st.columns(2)
+            act_date = c5.text_input("active_date",
+                value=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+            end_date_ex = c6.text_input("end_date",
+                value=(datetime.now(timezone.utc) + timedelta(days=14)).strftime("%Y-%m-%d"))
+            exam_sub = st.form_submit_button("Create Exam", use_container_width=True)
+        if exam_sub:
+            body = {
+                "external_id": exam_ext_id, "name": exam_name,
+                "exam_url": exam_url_ex, "duration": int(exam_dur),
+                "department_id": dept_id, "active": "Y",
+                "active_date": act_date, "end_date": end_date_ex,
+            }
+            with st.spinner("Creating exam..."):
+                result = post_json(f"{TC_BASE}/institutions/{institution_uuid_ex}/exams", body)
+            if result.get("success"):
+                set_ctx(rp2_exam_external_id=exam_ext_id)
+            st.session_state["rp2_exam_result"] = result
+        show_response(st.session_state.get("rp2_exam_result"))
+
+    st.divider()
+
+    # ── ② Launch Session ──────────────────────────────────────────────────────
+    st.subheader("② Launch Session")
+    exam_for_flow = get_ctx("rp2_exam_external_id")
+    if not exam_for_flow:
+        st.warning("⚠️ Complete Exam Setup above first.")
+        return
+
+    st.caption(f"Using exam `{exam_for_flow}` · Runs: Create User → Create Grant → Get Start URL")
+
+    d = _seed("rp2_launch"); fn, ln = d["fn"], d["ln"]; tag = d["tag"]
+    with st.form("rp2_launch"):
+        st.markdown("**Student**")
+        c1, c2 = st.columns(2)
+        first_name  = c1.text_input("first_name",  value=fn)
+        last_name   = c2.text_input("last_name",   value=ln)
+        email       = st.text_input("email",        value=d["email"])
+        c3, c4 = st.columns(2)
+        external_id = c3.text_input("external_id",  value=d["id"])
+        tz_val      = c4.selectbox("timezone",      TIMEZONES)
+        st.markdown("**Session** *(optional overrides)*")
+        c5, c6 = st.columns(2)
+        tk_url  = c5.text_input("testtaker_exam_url",      value="https://exam-demo.streamlit.app/")
+        tk_pass = c6.text_input("testtaker_exam_password", value="password")
+        tk_dur  = st.number_input("testtaker_exam_duration (min)", value=60, step=15)
+        run_sub = st.form_submit_button("▶ Run Flow", use_container_width=True, type="primary")
+
+    if run_sub:
+        flow = {}
+        with st.status("Running flow...", expanded=True) as status:
+            # Step 1 — Create User
+            st.write("Step 1/3 — Creating user...")
+            flow["user"] = post_json(f"{TC_BASE}/users", {
+                "email": email, "first_name": first_name, "last_name": last_name,
+                "external_id": external_id, "timezone": tz_val,
+                "roles": [{"role": "student"}],
+            })
+            if not flow["user"].get("success"):
+                status.update(label="❌ Failed at Step 1 — Create User", state="error")
+            else:
+                st.write("✅ User created")
+                # Step 2 — Create Grant
+                st.write("Step 2/3 — Creating grant...")
+                flow["grant"] = post_json(
+                    f"{TC_BASE}/email/users/{email}/grants",
+                    {"external_id": exam_for_flow}
+                )
+                if not flow["grant"].get("success"):
+                    status.update(label="❌ Failed at Step 2 — Create Grant", state="error")
+                else:
+                    grant_uuid = (flow["grant"].get("data") or {}).get("grant_uuid", "")
+                    set_ctx(rp2_grant_uuid=grant_uuid)
+                    st.write("✅ Grant created")
+                    # Step 3 — Get Start URL
+                    st.write("Step 3/3 — Getting start URL...")
+                    flow["url"] = put_json(
+                        f"{TC_BASE}/email/users/{email}/grants/{grant_uuid}/start_url",
+                        {"testtaker_exam_url": tk_url,
+                         "testtaker_exam_password": tk_pass,
+                         "testtaker_exam_duration": int(tk_dur)},
+                    )
+                    if not flow["url"].get("success"):
+                        status.update(label="❌ Failed at Step 3 — Get Start URL", state="error")
+                    else:
+                        st.write("✅ Start URL ready")
+                        status.update(label="✅ Flow complete — Launch button below", state="complete")
+        st.session_state["rp2_flow"] = flow
+
+    # ── Results ───────────────────────────────────────────────────────────────
+    flow = st.session_state.get("rp2_flow", {})
+    if flow:
+        if flow.get("user") and not flow["user"].get("success"):
+            show_response(flow["user"])
+        elif flow.get("grant") and not flow["grant"].get("success"):
+            show_response(flow["grant"])
+        elif flow.get("url"):
+            show_response(flow["url"])
+
+
+# ══════════════════════════════════════════════════════════════
 # RIGHT PANEL — Session context
 # ══════════════════════════════════════════════════════════════
 
@@ -1107,24 +1237,27 @@ CTX_SECTIONS = {
     "Test Center Chain":     ["institution_uuid", "exam_uuid", "delivery_window_uuid",
                               "vendor_uuid", "tc_location_id", "vendor_time_slot_id",
                               "appointment_uuid"],
+    "Record+ V2":            ["rp2_exam_external_id", "rp2_grant_uuid"],
 }
 
 CTX_SOURCES = {
-    "student_id":           "Create User / Add Bluebird",
-    "first_name":           "Add Bluebird",
-    "last_name":            "Add Bluebird",
-    "email":                "Add Bluebird",
-    "reservation_id":       "Add Adhoc",
-    "reservation_uuid":     "Record+",
-    "exam_id":              "Add Bluebird / Record+",
-    "term_id":              "Get Terms",
-    "institution_uuid":     "TC: Get Institution",
-    "exam_uuid":            "TC: Get Exams",
-    "delivery_window_uuid": "TC: Delivery Windows",
-    "vendor_uuid":          "TC: Test Locations",
-    "tc_location_id":       "TC: Test Locations",
-    "vendor_time_slot_id":  "TC: Availability",
-    "appointment_uuid":     "TC: Post Appointment",
+    "student_id":             "Create User / Add Bluebird",
+    "first_name":             "Add Bluebird",
+    "last_name":              "Add Bluebird",
+    "email":                  "Add Bluebird",
+    "reservation_id":         "Add Adhoc",
+    "reservation_uuid":       "Record+",
+    "exam_id":                "Add Bluebird / Record+",
+    "term_id":                "Get Terms",
+    "institution_uuid":       "TC: Get Institution",
+    "exam_uuid":              "TC: Get Exams",
+    "delivery_window_uuid":   "TC: Delivery Windows",
+    "vendor_uuid":            "TC: Test Locations",
+    "tc_location_id":         "TC: Test Locations",
+    "vendor_time_slot_id":    "TC: Availability",
+    "appointment_uuid":       "TC: Post Appointment",
+    "rp2_exam_external_id":   "Record+ V2: Create Exam",
+    "rp2_grant_uuid":         "Record+ V2: Create Grant",
 }
 
 def render_ctx_panel():
@@ -1212,6 +1345,7 @@ PAGE_MAP = {
     "tc_avail":     page_tc_availability,
     "tc_post":      page_tc_post_appointment,
     "tc_del":       page_tc_delete_appointment,
+    "rp2":          page_rp2,
 }
 
 page_fn = PAGE_MAP.get(selection, page_home)
