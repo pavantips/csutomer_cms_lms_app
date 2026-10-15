@@ -1122,18 +1122,16 @@ def page_rp2():
     with st.expander("Create Exam", expanded=not bool(saved_exam)):
         d_ex = _seed("rp2_exam")
         with st.form("rp2_create_exam"):
-            institution_uuid_ex = st.text_input("institution_uuid", value=iid,
-                                                 placeholder="From TC: Get Institution / whoami")
+            institution_uuid_ex = st.text_input("institution_uuid",
+                                                 value=iid or "0d68013f-6a45-40a7-b690-d3c85a30a461")
             c1, c2 = st.columns(2)
             exam_ext_id = c1.text_input("external_id",   value=d_ex["exam_id"],
                                          placeholder="e.g. MATH101_FINAL_2024")
             exam_name   = c2.text_input("name",          value=d_ex["description"])
             st.markdown("**term** *(required)*")
             c3, c4 = st.columns(2)
-            term_id_ex   = c3.text_input("term.id",   value=get_ctx("term_id") or "",
-                                          placeholder="e.g. SPRING2024")
-            term_name_ex = c4.text_input("term.name", value="",
-                                          placeholder="e.g. Spring 2024")
+            term_id_ex   = c3.text_input("term.id",   value=get_ctx("term_id") or "299189")
+            term_name_ex = c4.text_input("term.name", value="test")
             c5, c6 = st.columns(2)
             dept_id     = c5.text_input("department_id", value="13902")
             exam_dur    = c6.number_input("duration (min)", value=60, step=15)
