@@ -1128,13 +1128,16 @@ def page_rp2():
             exam_ext_id = c1.text_input("external_id",   value=d_ex["exam_id"],
                                          placeholder="e.g. MATH101_FINAL_2024")
             exam_name   = c2.text_input("name",          value=d_ex["description"])
+            st.markdown("**term** *(required)*")
             c3, c4 = st.columns(2)
-            term_id_ex  = c3.text_input("term_id",       value=get_ctx("term_id") or "",
-                                         placeholder="From Get Terms")
-            dept_id     = c4.text_input("department_id", value="13902")
+            term_id_ex   = c3.text_input("term.id",   value=get_ctx("term_id") or "",
+                                          placeholder="e.g. SPRING2024")
+            term_name_ex = c4.text_input("term.name", value="",
+                                          placeholder="e.g. Spring 2024")
             c5, c6 = st.columns(2)
-            exam_dur  = c5.number_input("duration (min)", value=60, step=15)
-            exam_url_ex = c6.text_input("exam_url",      value="https://exam-demo.streamlit.app/")
+            dept_id     = c5.text_input("department_id", value="13902")
+            exam_dur    = c6.number_input("duration (min)", value=60, step=15)
+            exam_url_ex = st.text_input("exam_url",   value="https://exam-demo.streamlit.app/")
             c7, c8 = st.columns(2)
             act_date = c7.text_input("active_date",
                 value=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
@@ -1147,9 +1150,8 @@ def page_rp2():
                 "exam_url": exam_url_ex, "duration": int(exam_dur),
                 "department_id": dept_id, "active": "Y",
                 "active_date": act_date, "end_date": end_date_ex,
+                "term": {"id": term_id_ex, "name": term_name_ex},
             }
-            if term_id_ex:
-                body["term_id"] = term_id_ex
             with st.spinner("Creating exam..."):
                 result = post_json(f"{TC_BASE}/institutions/{institution_uuid_ex}/exams", body)
             if result.get("success"):
