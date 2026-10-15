@@ -547,15 +547,21 @@ def page_record_plus_fulfill():
 
 
 def page_get_terms():
-    st.markdown("**`GET`** `api.proctoru.com/api/getTerms`")
+    st.markdown("**`GET`** `api.proctoru.com/api/getInstitutionTermList/`")
     st.title("Get Terms")
     st.caption("Returns academic terms. Saves the first term_id to session.")
     with st.form("get_terms"):
         submitted = st.form_submit_button("⚡ Send Request", use_container_width=True)
     if submitted:
         with st.spinner("Calling API..."):
-            result = get_params(f"{API_BASE}/getTerms", {"time_sent": now_iso()})
-        extract_and_save(result)
+            result = get_params(f"{API_BASE}/getInstitutionTermList/", {"time_sent": now_iso()})
+        if result.get("success"):
+            data = result.get("data", {})
+            items = data.get("data", data) if isinstance(data, dict) else data
+            if isinstance(items, list) and items:
+                tid = items[0].get("term_id") or items[0].get("id")
+                if tid:
+                    set_ctx(term_id=str(tid))
         st.session_state["last_result"] = result
     show_response(st.session_state.get("last_result"))
 
@@ -1123,13 +1129,16 @@ def page_rp2():
                                          placeholder="e.g. MATH101_FINAL_2024")
             exam_name   = c2.text_input("name",          value=d_ex["description"])
             c3, c4 = st.columns(2)
-            exam_dur  = c3.number_input("duration (min)", value=60, step=15)
-            dept_id   = c4.text_input("department_id",   value="13902")
-            exam_url_ex = st.text_input("exam_url",      value="https://exam-demo.streamlit.app/")
+            term_id_ex  = c3.text_input("term_id",       value=get_ctx("term_id") or "",
+                                         placeholder="From Get Terms")
+            dept_id     = c4.text_input("department_id", value="13902")
             c5, c6 = st.columns(2)
-            act_date = c5.text_input("active_date",
+            exam_dur  = c5.number_input("duration (min)", value=60, step=15)
+            exam_url_ex = c6.text_input("exam_url",      value="https://exam-demo.streamlit.app/")
+            c7, c8 = st.columns(2)
+            act_date = c7.text_input("active_date",
                 value=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-            end_date_ex = c6.text_input("end_date",
+            end_date_ex = c8.text_input("end_date",
                 value=(datetime.now(timezone.utc) + timedelta(days=14)).strftime("%Y-%m-%d"))
             exam_sub = st.form_submit_button("Create Exam", use_container_width=True)
         if exam_sub:
@@ -1139,6 +1148,8 @@ def page_rp2():
                 "department_id": dept_id, "active": "Y",
                 "active_date": act_date, "end_date": end_date_ex,
             }
+            if term_id_ex:
+                body["term_id"] = term_id_ex
             with st.spinner("Creating exam..."):
                 result = post_json(f"{TC_BASE}/institutions/{institution_uuid_ex}/exams", body)
             if result.get("success"):
